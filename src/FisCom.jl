@@ -1,7 +1,6 @@
 module FisCom
 
-export oh2, oh4, oh6
+# export oh2, oh4, oh6
+include("./waves_FDTD.jl")
 
-include("./waves_3d.jl")
-
-end # module FisCom
+end

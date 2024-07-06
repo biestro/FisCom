@@ -1,13 +1,20 @@
+module FDTD
+
 using LinearAlgebra
 using StaticArrays
 using SIMD
+using ProgressBars
 
-#=
 
-Exports methods for solving the wave equation using FDTD of O(h²), O(h⁴), and O(h⁶)
-in three dimensions
+export oh2, oh4, oh6
 
-=#
+global MAX_MEMORY = 5e9
+
+#= === 2D algorithms === =#
+
+
+
+#= === 3D algorithms === =#
 
 
 """
@@ -48,14 +55,16 @@ end
 
 Solves the 3D wave equatio_nt with error O(h^2)
 """
-function oh2(_vₙ::Matrix{Float64}, 
-             _vₙ₊₁::Matrix{Float64}, 
-             _alpha::Matrix{Float64}, 
-             _kappa::Matrix{Float64}, 
-             _nx::Int64, 
-             _ny::Int64, 
-             _nz::Int64,
-             _nt::Int64)
+function oh2(_vₙ::Array{Float64, 3}, 
+             _vₙ₊₁::Array{Float64, 3}, 
+             _alpha::Array{Float64, 3}, 
+             _kappa::Array{Float64, 3}, 
+             _xs::LinRange, 
+             _ys::LinRange, 
+             _zs::LinRange,
+             _nt::Int64;
+             _absorbing=true)
+
 
   ##############################################################################
   println()
@@ -65,6 +74,7 @@ function oh2(_vₙ::Matrix{Float64},
   println("Allocating...")
   mat = zeros(Float32,n, nx, ny,nz)
   println("Allocated 4D array! (of size $(Base.format_bytes(sizeof(mat))))")
+  @assert sizeof(mat) < MAX_MEMORY "MAX_MEMORY variable exceeded, check waves_FDTD for array memory limit"
   ##############################################################################
   loss = 1.0
   bndry = 1
@@ -88,13 +98,13 @@ function oh2(_vₙ::Matrix{Float64},
           _vₙ₊₁[ii, jj, kk] *= loss
           
           # absorbing bou_ntdaries
-          for bb in 1:bndry
-            _vₙ₊₁[bb,jj,kk] = _vₙ[bb+1 ,jj,kk ] + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[bb+1, jj,kk] - _vₙ[bb, jj, kk]);# x = 0
-            _vₙ₊₁[ii,bb,kk] = _vₙ[ii, bb+1 ,kk] + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii, bb+1,kk] - _vₙ[ii, bb, kk]);# y = 0
-            _vₙ₊₁[ii,jj,bb] = _vₙ[ii,jj, bb+1 ] + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii,jj, bb+1] - _vₙ[ii, jj, bb]);# z = 0
-            _vₙ₊₁[nx-1+bb,jj,kk] = _vₙ[nx-2+bb,jj,kk]  + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[nx-2+bb,jj,kk] - _vₙ[nx-1+bb,jj,kk]);# x = N
-            _vₙ₊₁[ii,ny-1+bb,kk] = _vₙ[ii,ny-2+bb,kk]  + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii,ny-2+bb,kk] - _vₙ[ii,ny-1+bb,kk]);# y = N
-            _vₙ₊₁[ii,jj,nz-1+bb] = _vₙ[ii,jj,nz-2+bb]  + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii,jj,nz-2+bb] - _vₙ[ii,jj,nz-1+bb]);# z = N
+          if _absorbing
+            _vₙ₊₁[1,jj,kk] = _vₙ[2 ,jj,kk ] + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[2, jj,kk] - _vₙ[1, jj, kk]);# x = 0
+            _vₙ₊₁[ii,1,kk] = _vₙ[ii, 2 ,kk] + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii, 2,kk] - _vₙ[ii, 1, kk]);# y = 0
+            _vₙ₊₁[ii,jj,1] = _vₙ[ii,jj, 2 ] + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii,jj, 2] - _vₙ[ii, jj, 1]);# z = 0
+            _vₙ₊₁[nx,jj,kk] = _vₙ[nx-1,jj,kk]  + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[nx-1,jj,kk] - _vₙ[nx,jj,kk]);# x = N
+            _vₙ₊₁[ii,ny,kk] = _vₙ[ii,ny-1,kk]  + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii,ny-1,kk] - _vₙ[ii,ny,kk]);# y = N
+            _vₙ₊₁[ii,jj,nz] = _vₙ[ii,jj,nz-1]  + (_kappa[ii,jj,kk]-1)/(_kappa[ii,jj,kk]+1) * (_vₙ₊₁[ii,jj,nz-1] - _vₙ[ii,jj,nz]);# z = N
           end
         end
       end
@@ -109,7 +119,15 @@ end
 
 Solves the 3D wave equation with error O(h^4)
 """
-function oh4(vₙ::Array{Float64,3}, vₙ₊₁::Array{Float64,3}, α::Array{Float64,3}, κ::Array{Float64,3}, _xs::LinRange, _ys::LinRange,_zs::LinRange ,n::Int64)
+function oh4(vₙ::Array{Float64,3}, 
+             vₙ₊₁::Array{Float64,3}, 
+             α::Array{Float64,3}, 
+             κ::Array{Float64,3}, 
+             _xs::LinRange, 
+             _ys::LinRange,
+             _zs::LinRange ,
+             n::Int64;
+             _absorbing=true)
   # 3D
   println()
   println("Running O(h⁴) approximation...")
@@ -118,15 +136,13 @@ function oh4(vₙ::Array{Float64,3}, vₙ₊₁::Array{Float64,3}, α::Array{Flo
   println("Allocating...")
   mat = zeros(Float32,n, nx, ny,nz)
   println("Allocated 4D array! (of size $(Base.format_bytes(sizeof(mat))))")
+  @assert sizeof(mat) < MAX_MEMORY "MAX_MEMORY variable exceeded, check waves_FDTD for array memory limit"
 
   envelope_field = [exp(-0.5*(x^2 +y^2)) for x in _xs, y in _ys]
   loss = 1.0
   bndry = 2
   ω     = 2π * 0.02
   # vₙ₊₁[:,:,nz-3] .= envelope_field
-  vₙ₊₁[nx÷2-10:nx÷2+10,
-       ny÷2-10:ny÷2+10,
-       nz-3] .= 5.0
   @inbounds @fastmath for tt in ProgressBar(1:n)
     mat[tt,:,:,:] = copy(vₙ)
     vₙ₋₁ = copy(vₙ);
@@ -160,13 +176,15 @@ function oh4(vₙ::Array{Float64,3}, vₙ₊₁::Array{Float64,3}, α::Array{Flo
         # absorbing boundaries
         # don't mix for loops and vectorization, bad results
         # make this only work where the boudnaries are? would it be betters?
-        for bb in 1:bndry
+        if _absorbing
+        @inbounds for bb in 1:bndry
           vₙ₊₁[bb,jj,kk] = vₙ[bb+1 ,jj,kk ] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[bb+1, jj,kk]-vₙ[bb, jj, kk]);# x = 0
           vₙ₊₁[ii,bb,kk] = vₙ[ii, bb+1 ,kk] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii, bb+1,kk]-vₙ[ii, bb, kk]);# y = 0
           vₙ₊₁[ii,jj,bb] = vₙ[ii,jj, bb+1 ] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,jj, bb+1]-vₙ[ii, jj, bb]);# z = 0
           vₙ₊₁[nx-2+bb,jj,kk] = vₙ[nx-3+bb,jj,kk]  + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[nx-3+bb,jj,kk]-vₙ[nx-2+bb,jj,kk]);# x = N
           vₙ₊₁[ii,ny-2+bb,kk] = vₙ[ii,ny-3+bb,kk]  + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,ny-3+bb,kk]-vₙ[ii,ny-2+bb,kk]);# y = N
           vₙ₊₁[ii,jj,nz-2+bb] = vₙ[ii,jj,nz-3+bb]  + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,jj,nz-3+bb]-vₙ[ii,jj,nz-2+bb]);# z = N
+        end
         end
         end
       end
@@ -182,7 +200,15 @@ end
 
 Solves the 3D wave equation with error O(h^6)
 """
-function oh6(vₙ::Array{Float64,3}, vₙ₊₁::Array{Float64,3}, α::Array{Float64,3}, κ::Array{Float64,3}, _xs::LinRange, _ys::LinRange,_zs::LinRange ,n::Int64)
+function oh6(vₙ::Array{Float64,3}, 
+             vₙ₊₁::Array{Float64,3}, 
+             α::Array{Float64,3}, 
+             κ::Array{Float64,3}, 
+             _xs::LinRange, 
+             _ys::LinRange,
+             _zs::LinRange ,
+             n::Int64;
+             _absorbing=true)
   
   ##############################################################################
   println()
@@ -192,22 +218,21 @@ function oh6(vₙ::Array{Float64,3}, vₙ₊₁::Array{Float64,3}, α::Array{Flo
   println("Allocating...")
   mat = zeros(Float32,n, nx, ny,nz)
   println("Allocated 4D array! (of size $(Base.format_bytes(sizeof(mat))))")
+  @assert sizeof(mat) < MAX_MEMORY "MAX_MEMORY variable exceeded, check waves_FDTD for array memory limit"
   ##############################################################################
 
-  envelope_field = [exp(-0.5*(x^2 +y^2)) for x in _xs, y in _ys]
+  envelope_field = copy(vₙ₊₁)
   loss = 1.0
   bndry = 3
 
   ω     = 2π * 0.02
   # vₙ₊₁[:,:,nz-4] .= envelope_field
-  vₙ₊₁[nx÷2-10:nx÷2+10,
-       ny÷2-10:ny÷2+10,
-       nz-3] .= 5.0
   @inbounds @fastmath for tt in ProgressBar(1:n)
     mat[tt,:,:,:] = copy(vₙ)
     
     vₙ₋₁ = copy(vₙ);
-    # vₙ₊₁[:,:,nz-4] .= cos(ω*tt) .* envelope_field
+    #vₙ₊₁[:,:,nz-4] .= cos(ω*tt) .* envelope_field[:,:,nz÷2+1]
+    vₙ₊₁[:,:,:] .= cos(ω*tt) .* copy(envelope_field)
     vₙ = copy(vₙ₊₁);
     # vₙ[nx-4,ny-4,nz-4] = cos(ω*tt)
     @inbounds @fastmath @simd for kk in 4:nz-3
@@ -241,7 +266,8 @@ function oh6(vₙ::Array{Float64,3}, vₙ₊₁::Array{Float64,3}, α::Array{Flo
                                     2 * vₙ[ii, jj,kk] - vₙ₋₁[ii, jj,kk]; # 
           vₙ₊₁[ii, jj,kk] *= loss
         
-        for bb in 1:bndry
+        if _absorbing
+        @inbounds for bb in 1:bndry
           vₙ₊₁[bb,jj,kk] = vₙ[bb+1 ,jj,kk ] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[bb+1, jj,kk]-vₙ[bb, jj, kk]);# x = 0
           vₙ₊₁[ii,bb,kk] = vₙ[ii, bb+1 ,kk] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii, bb+1,kk]-vₙ[ii, bb, kk]);# y = 0
           vₙ₊₁[ii,jj,bb] = vₙ[ii,jj, bb+1 ] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,jj, bb+1]-vₙ[ii, jj, bb]);# z = 0
@@ -250,9 +276,11 @@ function oh6(vₙ::Array{Float64,3}, vₙ₊₁::Array{Float64,3}, α::Array{Flo
           vₙ₊₁[ii,jj,nz-3+bb] = vₙ[ii,jj,nz-4+bb]  + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,jj,nz-4+bb]-vₙ[ii,jj,nz-3+bb]);# z = N
         end
         end
+        end
       end
     end
   end
 
   return mat;
+end
 end
