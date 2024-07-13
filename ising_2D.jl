@@ -19,7 +19,7 @@ locs        = CartesianIndex.([-1,0,0,1],[0,1,-1,0])
 BOLTZMANN   = 1.0
 TEMP        = 1.0
 BETA        = 1/(BOLTZMANN*TEMP)
-MAXITER     = 10_000
+MAXITER     = 80_000
 # MAXITER     = 50000
 β           = BETA
 
@@ -29,12 +29,13 @@ end
 
 begin
   fig = Figure()
-  sl = Slider(fig[2,1], range=range(1,MAXITER,step=1))
+  # sl = Slider(fig[2,1], range=range(1,MAXITER,step=1))
   ax = Axis(fig[1,1])
   ax.aspect=DataAspect()
   data = eachslice(S, dims=3)
   hm=heatmap!(ax,data[1],colormap=:bone)
-  lift(sl.value) do _i
+  record(fig, "ising_2d.mp4", 1:100:MAXITER, framerate=60) do _i
+  # lift(sl.value) do _i
     hm[3][] = data[_i]
   end
   fig

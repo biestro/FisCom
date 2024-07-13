@@ -8,7 +8,7 @@ using FisCom: Ising
 begin
 GC.gc()
 NRUNS       = 20
-Nx, Ny, Nz  = 50,50,9
+Nx, Ny, Nz  = 20,20,5
 rng         = MersenneTwister(253)
 space       = CircularArray(sample(rng,[-1,1], Weights([0.59, 0.41]),(Nx,Ny,Nz)) )
 interaction = CircularArray(ones(Nx,Ny,Nz))
@@ -23,20 +23,30 @@ MAXITER     = 50_000
 
 
 S,_ = Ising.updateSpace(MAXITER, space, indices, interaction,locs, BETA, true)
+GC.gc()
 # @allocated M = ThreadsX.map((i)->last(update_space(MAXITER, space, indices, interaction,locs, BETA)), 1:NRUNS)
 # volume(S.data, algorithm=:absorption,absorption=1f0, interpolate=false,colormap=:bone)
 end
 
+using JLD2
+
+# @save "./data/ising_3d.jld" S
+
 begin
+  GC.gc()
   fig = Figure()
-  sl = Slider(fig[2,1], range=range(1,MAXITER,step=1))
-  pl = PointLight(Point3f(0,0,N), RGBf(4, 4, 4))
-  lscene = LScene(fig[1, 1], show_axis=false, scenekw = (lights = [pl], backgroundcolor=:white, clear=true))
+#   sl = Slider(fig[2,1], range=range(1,MAXITER,step=1))
+  ax = Axis3(fig[1,1])
   # data = eachslice(S, dims=4)
-  hm=volume!(lscene,S[1],interpolate=false, algorithm=:absorption,colormap=:bone)
-  # hm=volume!(lscene,data[1],interpolate=false, algorithm=:iso,isovalue=1.0,colormap=:bone,colorrange=(-0,20))
-  lift(sl.value) do _i
-    hm[4][] = S[_i]
+  hm=volume!(ax,S[1],interpolate=false, algorithm=:absorption,absorption=7f0,colormap=:afmhot)
+  ax.aspect=(Nx,Ny,Nz)
+  ax.perspectiveness = 0.8
+  record(fig, "ising_3d_nz=5.mp4", 1:100:MAXITER, framerate=60) do _i
+  # lift(sl.value) do _i
+    hm[4][] = S[_i % MAXITER + 1]
+    ax.azimuth = _i / MAXITER 
+    # _i += 100
+    # sleep(0.00000000001)
   end
   fig
 end
