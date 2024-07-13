@@ -1,5 +1,7 @@
 module FDTD
 
+# TODO: change Array{4} to Vec{Array{3}} for 3D data
+
 using LinearAlgebra
 using StaticArrays
 using SIMD
@@ -40,7 +42,7 @@ function oh2(_vₙ::Array{Float64, 1},
   bndry = 1
 
   @inbounds @fastmath for tt in ProgressBar(1:_nt)
-    mat[tt,:,:] = _vₙ
+    mat[tt,:] = _vₙ
     _vₙ₋₁ = copy(_vₙ);
     _vₙ = copy(_vₙ₊₁);
     @inbounds @fastmath @simd for jj in 2:ny-1
@@ -70,14 +72,13 @@ end
 """
   oh4(vₙ, vₙ₊₁, α, κ, nx, ny, n)
 
-Solves the 2D wave equation with error O(h^4)
+Solves the 1D wave equation with error O(h^4)
 """
-function oh4(vₙ::Array{Float64,2}, 
-             vₙ₊₁::Array{Float64,2}, 
-             α::Array{Float64,2}, 
-             κ::Array{Float64,2}, 
+function oh4(vₙ::Array{Float64,1}, 
+             vₙ₊₁::Array{Float64,1}, 
+             α::Array{Float64,1}, 
+             κ::Array{Float64,1}, 
              _xs::LinRange, 
-             _ys::LinRange,
              n::Int64;
              _absorbing=true)
   # 3D
@@ -140,14 +141,13 @@ end
 """
   oh6(vₙ, vₙ₊₁, α, κ, nx, ny, n)
 
-Solves the 2D wave equation with error O(h^6)
+Solves the 1D wave equation with error O(h^6)
 """
-function oh6(vₙ::Array{Float64,2}, 
-             vₙ₊₁::Array{Float64,2}, 
-             α::Array{Float64,2}, 
-             κ::Array{Float64,2}, 
+function oh6(vₙ::Array{Float64,1}, 
+             vₙ₊₁::Array{Float64,1}, 
+             α::Array{Float64,1}, 
+             κ::Array{Float64,1}, 
              _xs::LinRange, 
-             _ys::LinRange,
              n::Int64;
              _absorbing=true)
   
@@ -619,16 +619,112 @@ function oh6(vₙ::Array{Float64,3},
   loss = 1.0
   bndry = 3
 
-  ω     = 2π * 0.02
+  # ω     = 2π * 0.02
   # vₙ₊₁[:,:,nz-4] .= envelope_field
   @inbounds @fastmath for tt in ProgressBar(1:n)
     mat[tt,:,:,:] = copy(vₙ)
     
     vₙ₋₁ = copy(vₙ);
     #vₙ₊₁[:,:,nz-4] .= cos(ω*tt) .* envelope_field[:,:,nz÷2+1]
-    vₙ₊₁[:,:,:] .= cos(ω*tt) .* copy(envelope_field)
+    #vₙ₊₁[:,:,:] .= cos(ω*tt) .* copy(envelope_field)
     vₙ = copy(vₙ₊₁);
     # vₙ[nx-4,ny-4,nz-4] = cos(ω*tt)
+    @inbounds @fastmath @simd for kk in 4:nz-3
+      @inbounds for jj in 4:ny-3
+        @inbounds for ii in 4:nx-3
+          vₙ₊₁[ii, jj,kk]  = α[ii,jj,kk] * (
+                                        2vₙ[ii,jj,kk-3]+
+                                      -27vₙ[ii,jj,kk-2]+
+                                      270vₙ[ii,jj,kk-1]+
+                                      270vₙ[ii,jj,kk+1]+
+                                      -27vₙ[ii,jj,kk+2]+
+                                        2vₙ[ii,jj,kk+3]+
+
+                                        2vₙ[ii,jj-3,kk]+
+                                      -27vₙ[ii,jj-2,kk]+
+                                      270vₙ[ii,jj-1,kk]+
+                                      270vₙ[ii,jj+1,kk]+
+                                      -27vₙ[ii,jj+2,kk]+
+                                        2vₙ[ii,jj+3,kk]+
+
+                                        2vₙ[ii-3,jj,kk]+
+                                      -27vₙ[ii-2,jj,kk]+
+                                      270vₙ[ii-1,jj,kk]+
+                                      270vₙ[ii+1,jj,kk]+
+                                      -27vₙ[ii+2,jj,kk]+
+                                        2vₙ[ii+3,jj,kk]+
+                                        
+                                   -3*490vₙ[ii,  jj,kk]
+                                    ) / 180 + 
+
+                                    2 * vₙ[ii, jj,kk] - vₙ₋₁[ii, jj,kk]; # 
+          vₙ₊₁[ii, jj,kk] *= loss
+        
+        if _absorbing
+        @inbounds for bb in 1:bndry
+          vₙ₊₁[bb,jj,kk] = vₙ[bb+1 ,jj,kk ] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[bb+1, jj,kk]-vₙ[bb, jj, kk]);# x = 0
+          vₙ₊₁[ii,bb,kk] = vₙ[ii, bb+1 ,kk] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii, bb+1,kk]-vₙ[ii, bb, kk]);# y = 0
+          vₙ₊₁[ii,jj,bb] = vₙ[ii,jj, bb+1 ] + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,jj, bb+1]-vₙ[ii, jj, bb]);# z = 0
+          vₙ₊₁[nx-3+bb,jj,kk] = vₙ[nx-4+bb,jj,kk]  + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[nx-4+bb,jj,kk]-vₙ[nx-3+bb,jj,kk]);# x = N
+          vₙ₊₁[ii,ny-3+bb,kk] = vₙ[ii,ny-4+bb,kk]  + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,ny-4+bb,kk]-vₙ[ii,ny-3+bb,kk]);# y = N
+          vₙ₊₁[ii,jj,nz-3+bb] = vₙ[ii,jj,nz-4+bb]  + (κ[ii,jj,kk]-1)/(κ[ii,jj,kk]+1) * (vₙ₊₁[ii,jj,nz-4+bb]-vₙ[ii,jj,nz-3+bb]);# z = N
+        end
+        end
+        end
+      end
+    end
+  end
+
+  return mat;
+end
+
+function oh6_drops(vₙ::Array{Float64,3}, 
+             vₙ₊₁::Array{Float64,3}, 
+             α::Array{Float64,3}, 
+             κ::Array{Float64,3}, 
+             _xs::LinRange, 
+             _ys::LinRange,
+             _zs::LinRange ,
+             n::Int64;
+             _absorbing=true)
+  
+  ##############################################################################
+  println()
+  println("Running O(h⁶) approximation...")
+  println("==============================")
+  nx,ny,nz = length(_xs), length(_ys), length(_zs)
+  println("Allocating...")
+  mat = zeros(Float32,n, nx, ny,nz)
+  println("Allocated 4D array! (of size $(Base.format_bytes(sizeof(mat))))")
+  @assert sizeof(mat) < MAX_MEMORY "MAX_MEMORY variable exceeded, check waves_FDTD for array memory limit"
+  ##############################################################################
+
+  envelope_field = copy(vₙ₊₁)#[exp(-60 * (x^2+y^2+z^2))]
+  loss = 1.0
+  bndry = 3
+
+  to_choose_from = CartesianIndices((4:nx-4,4:ny-4, 4:nz-4))
+  
+
+  # ω     = 2π * 0.02
+  # vₙ₊₁[:,:,nz-4] .= envelope_field
+  @inbounds @fastmath for tt in ProgressBar(1:n)
+    mat[tt,:,:,:] = copy(vₙ)
+    vₙ₋₁ = copy(vₙ);
+    #vₙ₊₁[:,:,nz-4] .= cos(ω*tt) .* envelope_field[:,:,nz÷2+1]
+    #vₙ₊₁[:,:,:] .= cos(ω*tt) .* copy(envelope_field)
+    vₙ = copy(vₙ₊₁);
+    if (tt-1) % 25 == 0
+      rand_center = (rand(3)*2 .- 1) * _xs[end]
+      vₙ += exp.( -60 .*( 
+               reshape(_xs .- rand_center[1],(nx,1,1)).^2 
+            .+ reshape(_ys .- rand_center[2],(1,ny,1)).^2 
+            .+ reshape(_zs .- rand_center[3],(1,1,nz)).^2)
+      ) 
+
+
+      # vₙ[rand(to_choose_from)] += [exp(-60 * (x))]
+    end
     @inbounds @fastmath @simd for kk in 4:nz-3
       @inbounds for jj in 4:ny-3
         @inbounds for ii in 4:nx-3
