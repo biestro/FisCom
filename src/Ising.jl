@@ -2,13 +2,18 @@ module Ising
 
 # TODO: do a monte carlo step each time? or check all gridpoints per time
 # TODO: add interaction
-# TODO: add parametric type (for optimization)
+# TODO: add parametric types for CartesianIndex{N} and CircularArray{N} (for optimization)
+# TODO: convolve the lattice to find its energy (set the mode to wrap as in python)
+# TODO: use a lookup table or an OffsetArray to find energy (i.e. arr[-4] = exp(-4)) 
+# TODO: change the conditional into branchless computation (not really that important, check the compiler)
 
 using Graphs, SimpleWeightedGraphs, LinearAlgebra, Random
 using CircularArrays, OffsetArrays, StatsBase
+using OffsetArrays
 using ProgressBars
 
 global MAX_MEMORY = 5e9
+global xoshiro_rng = Xoshiro(1111)
 
 export updateSpace
 
@@ -29,25 +34,51 @@ function updateSpace(_config::CircularArray, _locs::Vector{T}, _beta::Float64, _
 
 indices = eachindex(_config)
 magnet  = 0.0 # will store all magnetization
+spin = Int16
+# dims = length(size(_config)) # dimensions of model
+# delta_energy_vals = exp.(-4*(-dims:dims)*_beta)
+# energy_table = Dict(zip(4*(-dims:dims),delta_energy_vals)) # value of neighbours
+# println(energy_table)
 
-for _ in ProgressBar(1:_MAXITER*length(indices))# monte carlo steps (each axis dimension)
+# for _ in 1:_MAXITER*length(indices)# monte carlo steps times each axis dimension
+for _ in 1:_MAXITER# monte carlo steps times each axis dimension
 
-  _ind = rand(indices)   # random index selection
-  _spin = _config[_ind]  # spin at random index σᵢ
+  ind = rand(indices)   # random index selection
+  spin = _config[ind]  # spin at random index σᵢ
   
-  _neighbours = sum(_config[fill(_ind,length(_locs)) + _locs]) # get nearest neighbours (locs)
-  _delta_energy = 2*_spin*_neighbours
-  if _delta_energy < 0
-    _spin *=-1
-  elseif rand() < exp(-_delta_energy*_beta)
-    _spin *=-1
+  neighbours = sum(_config[fill(ind,length(_locs)) + _locs]) # get nearest neighbours (locs) σᵢ * (σ₁+σ₂+...+σⱼ)
+  delta_energy = 2*spin*neighbours
+
+  spin *= 1 - (((delta_energy < 0) || (rand() < exp(-delta_energy*_beta))) * 2) # takes same time and allocations as using a lookup table
+  # spin *= 1 - (((delta_energy < 0) || (rand() < energy_table[delta_energy])) * 2) # same as below
+  # spin *= 1 - (((delta_energy < 0) || (rand() < delta_energy_vals[delta_energy÷4 + dims + 1])) * 2) # same as below
+
+  #=
+  if delta_energy < 0
+    spin *=-1
+  elseif rand() < exp(-delta_energy*_beta) # assert the rng to be xoshiro256
+    spin *=-1
   end
-  _config[_ind] = _spin  #  update spin at location
+  =#
+
+  _config[ind] = spin  #  update spin at location
   magnet = magnet + sum(_config) # update magnetization
+  # energy = fun(space)
 end
-return magnet / _MAXITER / length(indices) # average magnetization averaged over time (same as length(_config))
+return magnet / _MAXITER / length(indices) # average magnetization averaged over time (same as length(_config)) (normalized)
 end
 
+
+  # _energy = 0.0
+  # for _ind in eachindex()
+  #   _spin = _config[_ind]
+  #   _neighbours = sum(_config[fill(_ind,length(locs)) + locs]) # get neighbouring spin
+  #   _energy += -_neighbours * _spin
+  #   E1 += _energy / 4.0
+  # end1
+#   Mag = sum(_config)
+#   M1 = M1 + Mag
+  # end
 
 
 # """
