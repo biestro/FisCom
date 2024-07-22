@@ -27,7 +27,7 @@ end
 @time _mags = ThreadsX.map(_temp->Ising.updateSpace(copy(space), locs, 1.0 / (BOLTZMANN * _temp ), MAXITER), TEMP_ARR)
 # _mags = [Ising.updateSpace(copy(space), locs, 1.0 / (BOLTZMANN * _temp ), MAXITER) for _temp in ProgressBar(TEMP_ARR)]
 
-# Plot
+# Plot magnetizations
 let
 fig = Figure()
 plot(fig[1,1],TEMP_ARR, abs.(_mags))

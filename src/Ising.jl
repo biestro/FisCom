@@ -35,12 +35,7 @@ function updateSpace(_config::CircularArray, _locs::Vector{T}, _beta::Float64, _
 indices = eachindex(_config)
 magnet  = 0.0 # will store all magnetization
 spin = Int16
-# dims = length(size(_config)) # dimensions of model
-# delta_energy_vals = exp.(-4*(-dims:dims)*_beta)
-# energy_table = Dict(zip(4*(-dims:dims),delta_energy_vals)) # value of neighbours
-# println(energy_table)
 
-# for _ in 1:_MAXITER*length(indices)# monte carlo steps times each axis dimension
 for _ in 1:_MAXITER# monte carlo steps times each axis dimension
 
   ind = rand(indices)   # random index selection
@@ -50,8 +45,6 @@ for _ in 1:_MAXITER# monte carlo steps times each axis dimension
   delta_energy = 2*spin*neighbours
 
   spin *= 1 - (((delta_energy < 0) || (rand() < exp(-delta_energy*_beta))) * 2) # takes same time and allocations as using a lookup table
-  # spin *= 1 - (((delta_energy < 0) || (rand() < energy_table[delta_energy])) * 2) # same as below
-  # spin *= 1 - (((delta_energy < 0) || (rand() < delta_energy_vals[delta_energy÷4 + dims + 1])) * 2) # same as below
 
   #=
   if delta_energy < 0
