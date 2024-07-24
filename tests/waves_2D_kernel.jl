@@ -1,6 +1,8 @@
 using GLMakie
-using Combinatorics: combinations
+using Combinatorics: permutations, levicivita
 using ImageFiltering
+using LinearAlgebra
+using SparseArrays: spdiagm
 
 
 function finite_diff_coefficient(_ord::Int64)
@@ -36,7 +38,7 @@ end
 
 begin
   L          = 5.0
-  Ndims      = (51,51,51);
+  Ndims      = (51,51)#,51);
   Coords     = LinRange.(-L,L,Ndims);
   speed      = 0.2;
   space_step = 1.0; # spatial width
@@ -44,55 +46,74 @@ begin
   velocities = ones(Ndims...) * speed # velocities 
   KAPPA      = copy(velocities) * time_step/space_step  # 
   ALPHA      = (velocities*time_step/space_step).^2; # wave equation coefficient (α^2)
-  MAXITER    = 2500
+  MAXITER    = 1500
 
   # ALPHA[nx÷3:nx÷3+10,ny÷3:ny÷3+2] .*= 0.0
   # ALPHA[2nx÷3:2nx÷3+10,2ny÷3:2ny÷3+2] .*= 0.0
   U = zeros(Ndims...); # old
-  V = [exp(-5*((x-L/2)^2+(y-L/2)^2+(z-L/2)^2)) for x in Coords[1], y in Coords[2], z in Coords[3]] # actual
-  # V += [exp(-5*((x+L/2)^2+(y+L/2)^2)) for x in Coords[1], y in Coords[2]] # actual
+  # V = [exp(-5*((x-L/2)^2+(y-L/2)^2+(z-L/2)^2)) for x in Coords[1], y in Coords[2], z in Coords[3]] # actual
+  V = [exp(-5*((x+L/2)^2+(y+L/2)^2)) for x in Coords[1], y in Coords[2]] # actual
   W = zeros(Ndims...); # new 
 
-  order = 2 
+  order = 8
   wave_kernel = centered(get_laplace_kernel(length(Ndims),order))
   wave_array = fill(zeros(size(U)...), MAXITER)
+
+  # sparse matrix # only works with reshaping V into a field vector, 
+  # which is the Toeplitz version of the convolution
+
+  # println("Allocating...")
+  # # mat = zeros(Float32,n, nx, ny,nz)
+  # wave_array     = fill(zeros(Float32, size(U)...), MAXITER)
+  # println("Allocated $(ndims(wave_array)+ndims(wave_array[1]))D array! (of size $(Base.format_bytes(sizeof(wave_array))))")
+
+  base_kernel = wave_kernel[:,0]
+  sparse_op   = [fill(base_kernel[_i], Ndims[1]-abs(_i)) for _i in eachindex(base_kernel)]
+  sparse_mat  = diagm(Dict(zip(eachindex(base_kernel),sparse_op))...)
 end;
 
 begin
-wave_old = copy(U)
-wave_new = copy(W)
-wave_act = copy(V)
-for _i in 1:MAXITER
+  GC.gc()
+  wave_old = copy(U)
+  wave_new = copy(W)
+  wave_act = copy(V)
+  for _i in 1:MAXITER
+    
+    # update wave
   
-  # update wave
- 
-  # wave_new = ALPHA .* imfilter(wave_act, wave_kernel, Fill(0,wave_kernel)) + 2*wave_act - wave_old  # specify Fill(0,kernel) for Dirichlett conditions (boundary = 0)
-  wave_new = ALPHA .* imfilter(wave_act, wave_kernel, "circular") + 2*wave_act - wave_old
+    wave_new = ALPHA .* imfilter(wave_act, wave_kernel, Fill(0,wave_kernel)) + 2*wave_act - wave_old  # specify Fill(0,kernel) for Dirichlett conditions (boundary = 0)
+    # wave_new = ALPHA .* imfilter(wave_act, wave_kernel, "circular") + 2*wave_act - wave_old
+    # wave_new = ALPHA .* imfilter(wave_act, ImageFiltering.Laplacian((1,2),2), "circular") + 2*wave_act - wave_old
+    # wave_new = ALPHA .* (sparse_mat .* wave_act) + 2*wave_act - wave_old # tridiagonal
 
-  wave_array[_i] = wave_new # store wave
-  
-  # update values
+    wave_array[_i] = wave_new # store wave
+    
+    # update values
+    wave_old = wave_act
+    wave_act = wave_new
+    
+  end
+end
 
-  wave_old = wave_act
-  wave_act = wave_new
-  
-end
-end
+
+# volume(wave_act, algorithm=:absorption, absorption=5f0)
 
 let
   GC.gc()
   fig = Figure()
   # sl = Slider(fig[2,1], range=range(1,MAXITER,step=1))
-  ax = Axis(fig[1,1])
-  ax.aspect=DataAspect()
+  ax = Axis(fig[1,1]); ax.aspect=DataAspect()
 
-  hm=heatmap!(ax,abs.(wave_array[1]),colormap=:turbo)#,colorrange=(0,10))
+  hm=heatmap!(ax,abs.(wave_array[1]),colormap=:turbo,colorrange=(0,10))
+  # hm=volume!(ax,wave_act, algorithm=:absorption, absorption=2f0)
+  # hm=volume!(ax,wave_act, algorithm=:iso, absorption=2f0)
+  
   display(fig)
   for _i in 1:10:MAXITER
   # record(fig, "ising_2d.mp4", 1:100:MAXITER, framerate=60) do _i
   # lift(sl.value) do _i
     hm[3][] = abs.(wave_array[_i])
-    sleep(0.051)
+    sleep(0.05)
 
   end
   fig
