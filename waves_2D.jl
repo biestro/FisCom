@@ -1,7 +1,7 @@
 using GLMakie
 using FisCom: FDTD
 
-# 2D example
+# 2D example1
 begin
 L = 5.0
 nx,ny   = 91,91;
