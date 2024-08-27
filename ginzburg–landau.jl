@@ -13,7 +13,7 @@ begin
   V = rand(Ndims...); # initial field
 
   kernel_order = 4 # O(h^4)
-  laplacian    = centered(get_laplace_kernel(length(Ndims),kernel_order))
+  laplacian    = centered(FTDT.get_laplace_kernel(length(Ndims),kernel_order))
 
   println("Allocating...")
   wave_array     = fill(zeros(Float32, size(V)...), MAXITER)
@@ -38,18 +38,9 @@ begin
   ax = Axis(fig[1,1]); ax.aspect=DataAspect(); hm=heatmap!(ax,Coords...,abs.(wave_array[1]),colormap=:batlow)
   # ax = Axis3(fig[1,1]); ax.aspect=(1,1,1); hm=volume!(ax,Coords..., wave_array[1], algorithm=:absorption, absorption=4.5f0, colormap=:balance)
   cb=Colorbar(fig[2,1], hm, vertical=false, flipaxis=false, label=L"|\psi|^2"); cb.labelsize=24
-  #hm=volume!(ax,wave_array[1], algorithm=:iso, isorange=-0.1)
-  # hm = contour!(ax, wave_array[1], colormap=:delta, levels=2)
   
-  # display(fig)
-  # for _i in ProgressBar(2:10:MAXITER)
-  # record(fig, "landau.mp4", 2:MAXITER, framerate=60) do _i
   lift(sl.value) do _i
     hm[3][] = abs.(wave_array[_i])
-    # sleep(0.01)
-    # save("./images/landau"*lpad(_i, 4, '0')*".png", fig)
-
-
   end
   fig
 end

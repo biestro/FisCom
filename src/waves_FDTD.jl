@@ -7,6 +7,7 @@ using StaticArrays
 using SIMD
 using ProgressBars
 using Combinatorics: permutations, levicivita
+using ImageFiltering: centered
 
 
 
@@ -775,7 +776,7 @@ function oh6_drops(vₙ::Array{Float64,3},
 
   return mat;
 end
-end
+
 
 #= === kernels === =#
 function finite_diff_coefficient(_ord::Int64)
@@ -806,4 +807,6 @@ function get_laplace_kernel(_dim::Int64,_ord::Int64)
 
   #two_dim_ker += permutedims(two_dim_ker)
   return centered(kernel) # return centered version of kernel (0 = middle)
+end
+
 end
