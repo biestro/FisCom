@@ -79,7 +79,7 @@ begin
   # pl = PointLight(Point3f(0,L+0.5,L+1.5), RGBf(3, 3, 3))
   pl = PointLight(Point3f(0,0,0), RGBf(1, 1, 1))
   #al = AmbientLight(RGBf(0.5, 0.5, 0.5))
-  lscene = LScene(fig[1, 1], show_axis=false, scenekw = (lights = [pl], backgroundcolor=:black, clear=true))
+  lscene = LScene(fig[1, 1], show_axis=false, scenekw = (lights = [pl], backgroundcolor=:white, clear=true))
   center_vec = [0.0, 1.5L]
   # meshscatter!(lscene, [Point3f(x,y,z) for x in center_vec, y in center_vec, z in center_vec][:] .- Point3f(L,L,L), marker = my_marker, color=RGBAf(1.0, 1.0, 1.0, 1.0), markersize=1.0)
   # vol_data = volume!(lscene,X,Y,Z,abs.(volumes_non_abs[2]), algorithm=:iso,isorange=0.4,transparency=true, colormap=[RGBAf(1.0,1.0,0.0, 1.0)])
@@ -90,7 +90,7 @@ begin
 
 #   vol_data = volume!(lscene,X,Y,Z,abs.(volumes[2]), transparency=true, colormap=:cubehelix
 #  vol_data = contour!(lscene,X,Y,Z,abs.(volumes[2]), transparency=false, colormap=:turbo, levels=0.01:0.001:0.05, fxaa=true, overdraw=true)
-  vol_data = volume!(lscene,X,Y,Z,abs.(volumes[2]), algorithm = :absorption, absorption=3f0, transparency=false, colormap=Reverse(:Spectral), fxaa=true, colorrange=(0,1))
+  vol_data = volume!(lscene,X,Y,Z,abs.(volumes[2]), algorithm = :absorption, absorption=3f0, transparency=false, colormap=:turbo, fxaa=true, colorrange=(0,1))
   # vol_data = contour!(lscene,X,Y,Z,abs.(volumes_non_abs[2]), transparency=false, colorm1p=:turbo, levels=0.1:0.02:0.65 )
 #   vol_data = contour!(lscene,X,Y,Z,volumes[2], transparency=false, colormap=:grays,levels=[0.01, 0.1] )#levels=-0.1:0.01:0.1)
 
